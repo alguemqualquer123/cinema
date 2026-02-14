@@ -1,0 +1,261 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String    @id @default(uuid())
+  email     String    @unique
+  password  String
+  name      String
+  role      Role      @default(USER)
+  isActive  Boolean   @default(true)
+  phone     String?
+  cpf       String?
+  birthDate DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  orders  Order[]
+  tickets Ticket[]
+
+  @@map("users")
+}
+
+enum Role {
+  ADMIN
+  USER
+  STAFF
+}
+
+model Movie {
+  id             String    @id @default(uuid())
+  title          String
+  description    String    @db.Text
+  duration       Int
+  genre          String
+  posterUrl      String?
+  trailerUrl     String?
+  isActive       Boolean   @default(true)
+  classification String    @default("lancamento")
+  releaseDate    DateTime?
+  showing        Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  sessions Session[]
+
+  @@map("movies")
+}
+
+model Sala {
+  id            String   @id @default(uuid())
+  name          String
+  rows          Int      @default(10)
+  seatsPerRow   Int      @default(15)
+  isActive      Boolean  @default(true)
+  is3D          Boolean  @default(false)
+  isIMAX        Boolean  @default(false)
+  hasSoundDolby Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  seats    Seat[]
+  sessions Session[]
+
+  @@map("salas")
+}
+
+model Seat {
+  id              String     @id @default(uuid())
+  row             String
+  number          Int
+  type            SeatType   @default(STANDARD)
+  status          SeatStatus @default(AVAILABLE)
+  price           Int        @default(0)
+  isForDisability Boolean    @default(false)
+  isForElderly    Boolean    @default(false)
+  isForPregnant   Boolean    @default(false)
+  salaId          String
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  sala    Sala     @relation(fields: [salaId], references: [id], onDelete: Cascade)
+  tickets Ticket[]
+
+  @@unique([salaId, row, number])
+  @@map("seats")
+}
+
+enum SeatType {
+  STANDARD
+  PREFERENTIAL
+  ACCESSIBLE
+  VIP
+}
+
+enum SeatStatus {
+  AVAILABLE
+  RESERVED
+  OCCUPIED
+  BLOCKED
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  startTime DateTime
+  endTime   DateTime
+  price     Int      @default(0)
+  isActive  Boolean  @default(true)
+  movieId   String
+  salaId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  movie   Movie    @relation(fields: [movieId], references: [id])
+  sala    Sala     @relation(fields: [salaId], references: [id])
+  orders  Order[]
+  tickets Ticket[]
+
+  @@map("sessions")
+}
+
+model Order {
+  id             String      @id @default(uuid())
+  total          Decimal     @db.Decimal(10, 2)
+  status         OrderStatus @default(PENDING)
+  paymentId      String?
+  discountCode   String?
+  discountAmount Decimal     @default(0) @db.Decimal(10, 2)
+  userId         String
+  sessionId      String
+  seatIds        String      @db.Text
+  productItems   Json?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id])
+  session  Session   @relation(fields: [sessionId], references: [id])
+  tickets  Ticket[]
+  vouchers Voucher[]
+
+  @@map("orders")
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  CANCELLED
+  EXPIRED
+}
+
+model Ticket {
+  id          String       @id @default(uuid())
+  qrCode      String       @unique
+  status      TicketStatus @default(VALID)
+  price       Int
+  orderId     String
+  seatId      String
+  seatInfo    String
+  validatedAt DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  seat      Seat     @relation(fields: [seatId], references: [id])
+  // Removed userId and sessionId as they are not in TypeORM Ticket entity
+  user      User?    @relation(fields: [userId], references: [id])
+  userId    String?
+  session   Session? @relation(fields: [sessionId], references: [id])
+  sessionId String?
+
+  @@map("tickets")
+}
+
+enum TicketStatus {
+  VALID
+  USED
+  CANCELLED
+}
+
+model Discount {
+  id          String         @id @default(uuid())
+  code        String         @unique
+  description String
+  type        DiscountType
+  value       Int
+  maxUses     Int            @default(1)
+  currentUses Int            @default(0)
+  expiresAt   DateTime?
+  status      DiscountStatus @default(ACTIVE)
+  minPurchase Int            @default(0)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@map("discounts")
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED
+}
+
+enum DiscountStatus {
+  ACTIVE
+  EXPIRED
+  USED
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  name        String
+  description String?  @db.Text
+  price       Decimal  @db.Decimal(10, 2)
+  imageUrl    String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("products")
+}
+
+model Package {
+  id          String   @id @default(uuid())
+  name        String
+  description String?  @db.Text
+  price       Decimal  @db.Decimal(10, 2)
+  items       Json?
+  imageUrl    String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("packages")
+}
+
+model Voucher {
+  id          String        @id @default(uuid())
+  qrCode      String        @unique
+  status      VoucherStatus @default(VALID)
+  price       Decimal       @db.Decimal(10, 2)
+  itemName    String
+  itemId      String
+  quantity    Int           @default(1)
+  orderId     String
+  validatedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@map("vouchers")
+}
+
+enum VoucherStatus {
+  VALID
+  USED
+  CANCELLED
+}
